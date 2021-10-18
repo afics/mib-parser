@@ -74,6 +74,7 @@ impl MibParser {
 
     fn assignment(node: Node) -> Result<Assignment> {
         Ok(match_nodes!(node.into_children();
+            [macro_definition(a)] => a,
             [value_assignment(a)] => a,
             [type_assignment(a)] => a,
         ))
@@ -112,6 +113,20 @@ impl MibParser {
         Ok(match_nodes!(node.into_children();
             [identifier(i), some_type(t)] => Assignment{name: i, a_type: t, value:None}
         ))
+    }
+
+    fn macro_definition(node: Node) -> Result<Assignment> {
+        Ok(match_nodes!(node.into_children();
+            [macro_reference(r), macro_body(b)] => Assignment{name: r, a_type: b, value:None}
+        ))
+    }
+
+    fn macro_reference(node: Node) -> Result<String> {
+        Ok(format!("{:?}", node.as_rule()))
+    }
+
+    fn macro_body(node: Node) -> Result<String> {
+        Ok(format!("{:?}", node.as_rule()))
     }
 
     fn some_type(node: Node) -> Result<String> {
