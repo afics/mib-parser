@@ -1,4 +1,4 @@
-use pest_consume::{ Parser, match_nodes, Error};
+use pest_consume::{match_nodes, Error, Parser};
 use regex::Regex;
 
 #[derive(Parser)] // This allows Pest to add all the parse methods
@@ -41,21 +41,25 @@ impl MibParser {
 
     fn module_definition(node: Node) -> Result<Module> {
         Ok(match_nodes!(node.into_children();
-            [module_identifier(mi), module_body(mbs)] => Module{ name: mi, assignments: mbs},
+            [module_identifier(mi), module_body(mbs)] => Module{ name: mi, imports: mbs.0, assignments: mbs.1},
         ))
     }
 
-    fn module_body(node: Node) -> Result<Vec<Assignment>> {
+    fn module_body(node: Node) -> Result<(Vec<Import>, Vec<Assignment>)> {
         Ok(match_nodes!(node.into_children();
-            [assignment_list(a)] => a,
-            [export_list(e), assignment_list(a)] => a,
-            [import_list(i), assignment_list(a)] => a,
-            [export_list(e), import_list(i), assignment_list(a)] => a,
+            [assignment_list(a)] => (vec![], a),
+            [export_list(e), assignment_list(a)] => (vec![], a),
+            [import_list(i), assignment_list(a)] => (i, a),
+            [export_list(e), import_list(i), assignment_list(a)] => (i, a),
         ))
     }
 
-    fn import_list(node: Node) -> Result<String> {
-        Ok(format!("{:?}", node.as_rule()))
+    fn import_list(node: Node) -> Result<Vec<Import>> {
+        let mut result: Vec<Import> = vec![];
+        match_nodes!(node.into_children();
+            [symbols_from_module(imports)..] => result.extend(imports.flatten()),
+        );
+        Ok(result)
     }
 
     fn export_list(node: Node) -> Result<String> {
@@ -73,6 +77,29 @@ impl MibParser {
             [value_assignment(a)] => a,
             [type_assignment(a)] => a,
         ))
+    }
+
+    fn symbols_from_module(node: Node) -> Result<Vec<Import>> {
+        let mut result = vec![];
+        match_nodes!(node.into_children();
+          [symbol_list(s).., module_identifier(i)] => {
+             for sl in s {
+                 for symbol in sl {
+                  result.push(Import { name: symbol, from: i.clone()});
+                 }
+             }
+          }
+        );
+
+        Ok(result)
+    }
+
+    fn symbol_list(node: Node) -> Result<Vec<String>> {
+        Ok(match_nodes!(node.into_children(); [ symbol(s)..] => s.collect()))
+    }
+
+    fn symbol(node: Node) -> Result<String> {
+        Ok(node.as_str().to_owned())
     }
 
     fn value_assignment(node: Node) -> Result<Assignment> {
@@ -136,14 +163,14 @@ impl MibParser {
         let s = node.as_str();
         let len = s.len();
         // skip prefix and suffix
-        u64::from_str_radix(&s[1..len-2], 16).map_err(|e| node.error(e))
+        u64::from_str_radix(&s[1..len - 2], 16).map_err(|e| node.error(e))
     }
 
     fn binary_string(node: Node) -> Result<u64> {
         let s = node.as_str();
         let len = s.len();
         // skip prefix and suffix
-        u64::from_str_radix(&s[1..len-2], 2).map_err(|e| node.error(e))
+        u64::from_str_radix(&s[1..len - 2], 2).map_err(|e| node.error(e))
     }
 }
 
@@ -159,11 +186,11 @@ fn print_node(node: Node) {
 fn print_nodes(nodes: Nodes, level: usize) {
     for node in nodes {
         // A node is a combination of the rule which matched and a span of input
-        print!("{:indent$}", "", indent=level*2);
+        print!("{:indent$}", "", indent = level * 2);
         print_single_node(&node);
 
         // A node can be converted to an iterator of the tokens which make it up:
-        print_nodes(node.children(), level+1);
+        print_nodes(node.children(), level + 1);
     }
 }
 
@@ -172,14 +199,14 @@ fn print_single_node(node: &Node) {
         Rule::identifier => println!("{}", node.as_str()),
         Rule::number_string => println!("{}", node.as_str()),
         Rule::inner_string => println!("{}", clean_string(node.as_str())),
-        _ => println!("<<{:?}>>", node.as_rule())
+        _ => println!("<<{:?}>>", node.as_rule()),
     }
 }
 
 fn clean_string(s: &str) -> String {
-        // Squelch newlines surrounded by spaces or tabs
-        let re = Regex::new(r"[ \t]*\r?\n[ \t]*").unwrap();
-        format!( "\"{}\"", re.replace_all(s, "\\n"))
+    // Squelch newlines surrounded by spaces or tabs
+    let re = Regex::new(r"[ \t]*\r?\n[ \t]*").unwrap();
+    format!("\"{}\"", re.replace_all(s, "\\n"))
 }
 
 #[cfg(test)]
@@ -199,22 +226,36 @@ mod tests {
 
     #[test]
     fn quoted_string_1() {
-        let result = MibParser::quoted_string(parse(Rule::quoted_string, r#""this is a quoted string""#)).unwrap();
+        let result =
+            MibParser::quoted_string(parse(Rule::quoted_string, r#""this is a quoted string""#))
+                .unwrap();
         assert_eq!(result, "this is a quoted string");
     }
 
     #[test]
     fn quoted_string_2() {
-        let result = MibParser::quoted_string(parse(Rule::quoted_string, r#""this is a ""quoted"" string""#)).unwrap();
+        let result = MibParser::quoted_string(parse(
+            Rule::quoted_string,
+            r#""this is a ""quoted"" string""#,
+        ))
+        .unwrap();
         assert_eq!(result, r#"this is a "quoted" string"#);
     }
 
     #[test]
     fn quoted_string_3() {
-        let result = MibParser::quoted_string(parse(Rule::quoted_string, "\"this is a    \n   quoted string\"")).unwrap();
+        let result = MibParser::quoted_string(parse(
+            Rule::quoted_string,
+            "\"this is a    \n   quoted string\"",
+        ))
+        .unwrap();
         assert_eq!(result, "this is a\nquoted string");
 
-        let result = MibParser::quoted_string(parse(Rule::quoted_string, "\"this is a    \r\n   quoted string\"")).unwrap();
+        let result = MibParser::quoted_string(parse(
+            Rule::quoted_string,
+            "\"this is a    \r\n   quoted string\"",
+        ))
+        .unwrap();
         assert_eq!(result, "this is a\nquoted string");
     }
 
@@ -248,7 +289,10 @@ mod tests {
 
     #[test]
     fn object_id_0() {
-        let node = parse(Rule::value_assignment, "synology OBJECT IDENTIFIER ::= { enterprises 6574 }");
+        let node = parse(
+            Rule::value_assignment,
+            "synology OBJECT IDENTIFIER ::= { enterprises 6574 }",
+        );
         print_node(node)
     }
 
@@ -295,7 +339,7 @@ mod tests {
     fn constraint_list() {
         let input = "( SIZE (0..63) )";
         let node = parse(Rule::constraint_list, input);
-        print_node(node)        
+        print_node(node)
     }
 
     #[test]
@@ -314,7 +358,7 @@ mod tests {
             ::= { synology 2 }"#;
 
         let node = parse(Rule::value_assignment, input);
-        print_node(node)        
+        print_node(node)
     }
 
     #[test]
@@ -345,7 +389,7 @@ mod tests {
             ::= { synology 2 }"#;
 
         let node = parse(Rule::value_assignment, input);
-        print_node(node)        
+        print_node(node)
     }
 
     #[test]
@@ -355,7 +399,7 @@ mod tests {
                         FROM SNMPv2-CONF
             enterprises, MODULE-IDENTITY, OBJECT-TYPE, Integer32
                         FROM SNMPv2-SMI;
-        
+
         synoDisk MODULE-IDENTITY
             LAST-UPDATED "201309110000Z"
             ORGANIZATION "www.synology.com"
@@ -392,7 +436,7 @@ mod tests {
 
     #[test]
     fn snmp_module_part() {
-        let input = r#"MODULE -- this module       
+        let input = r#"MODULE -- this module
               GROUP rmonEtherStatsGroup
                   DESCRIPTION
                       "The RMON Ethernet Statistics Group is optional.""#;
@@ -413,13 +457,18 @@ mod tests {
                     print_node(node);
                     panic!("Failed test");
                 }
-                node 
-            },
-            Err(e) => panic!("Parse failed: {}", e)
+                node
+            }
+            Err(e) => panic!("Parse failed: {}", e),
         }
     }
 
     fn parse_fail(rule: Rule, input: &str) {
-        assert!(MibParser::parse(rule, input).is_err(), "Expected rule({:?}) to fail to parse '{}'", rule, input);
+        assert!(
+            MibParser::parse(rule, input).is_err(),
+            "Expected rule({:?}) to fail to parse '{}'",
+            rule,
+            input
+        );
     }
 }

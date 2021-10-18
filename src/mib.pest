@@ -2,7 +2,7 @@
 // Some basic tokens
 //
 
-// Technically we should distinguish between identifiers starting with lowcase
+// Technically we should distinguish between identifiers starting with lowercase
 // and those starting upper case, but that caused havoc
 identifier = @{ !keywords ~ ASCII_ALPHA ~ (ASCII_ALPHA | ASCII_DIGIT | "_" | "-")* }
 
@@ -69,8 +69,8 @@ macro_reference = { identifier | defined_macro_name }
 
 macro_body = { ("BEGIN" ~ macro_body_element* ~ "END")
           | (module_reference ~ macro_reference) }
- 
-macro_body_element = { 
+
+macro_body_element = {
                    "("
                  | ")"
                  | "|"
@@ -160,7 +160,7 @@ any_type = { "ANY" | ("ANY" ~ "DEFINED" ~ "BY" ~ identifier) }
 
 element_type_list = { element_type ~ ("," ~ element_type)* ~ ","? }
 
-element_type = { (identifier? ~ some_type ~ optional_or_default_element?) 
+element_type = { (identifier? ~ some_type ~ optional_or_default_element?)
             | ( identifier? ~ "COMPONENTS" ~ "OF" ~ some_type ) }
 
 optional_or_default_element = { "OPTIONAL" | ("DEFAULT" ~ identifier? ~ value) }
@@ -179,7 +179,7 @@ number = { number_value
 constraint_list = { "(" ~ constraint ~ ("|" ~ constraint)* ~ ")" }
 
 constraint = { size_constraint
-           | value_constraint           
+           | value_constraint
            | alphabet_constraint
            | contained_type_constraint
            | inner_type_constraint }
@@ -260,7 +260,7 @@ name_value_list = { "{" ~ name_value_component* ~ "}" }
 
 name_value_component = { ","? ~ name_or_number }
 
-name_or_number = { name_and_number | number_string | identifier } 
+name_or_number = { name_and_number | number_string | identifier }
 
 name_and_number = { identifier ~ "(" ~ (number_string | defined_value ) ~ ")" }
 
