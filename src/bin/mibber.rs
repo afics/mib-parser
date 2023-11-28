@@ -8,10 +8,11 @@ use walkdir::WalkDir;
 use std::time::Instant;
 
 
-use clap::Clap;
+use clap::Parser;
+
 /// Parse a MIB file or files
 /// This program uses env_logger, for detailed tracing set RUST_LOG=trace
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = "1.0", author = "Andy P++ <andy@failfree.net>")]
 struct Opts {
     /// The path to a single MIB file or a folder full of MIB files (batch mode)
@@ -28,7 +29,7 @@ struct Opts {
 
     // Print the result as yaml
     #[clap(short,long)]
-    yaml: bool,    
+    yaml: bool,
 }
 
 /// See if a given path has one of a number of file extensions (case insensitive)
@@ -65,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                  .filter_map(|e| e.ok())
                  .filter(|e| e.file_type().is_file())
                  .map(|e| e.into_path()) // Dir entries keep a file lock, so consume them into paths
-                 .filter(|p| match_ext(p, &extensions)) { 
+                 .filter(|p| match_ext(p, &extensions)) {
             match parse_file(&path, &options) {
                 Ok(info) => {
                     parsed_ok += 1;
@@ -97,7 +98,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        trace!("Took {}ms", now.elapsed().as_millis()); 
+        trace!("Took {}ms", now.elapsed().as_millis());
     }
 
     Ok(())
