@@ -4,9 +4,8 @@ extern crate mib_parser;
 
 use mib_parser::{parse_file, ParseOptions};
 use std::path::Path;
-use walkdir::WalkDir;
 use std::time::Instant;
-
+use walkdir::WalkDir;
 
 use clap::Parser;
 
@@ -20,15 +19,15 @@ struct Opts {
     mib: String,
 
     /// Set verbose to list parsed files and show the location of parse fails
-    #[clap(short,long)]
+    #[clap(short, long)]
     verbose: bool,
 
     // Pretty print the parse tree
-    #[clap(short,long)]
+    #[clap(short, long)]
     pretty: bool,
 
     // Print the result as yaml
-    #[clap(short,long)]
+    #[clap(short, long)]
     yaml: bool,
 }
 
@@ -37,7 +36,7 @@ struct Opts {
 pub fn match_ext<P: AsRef<Path>>(path: &P, extensions: &[&str]) -> bool {
     if let Some(ext) = path.as_ref().extension() {
         if let Some(sext) = ext.to_str() {
-            return extensions.contains(&sext.to_lowercase().as_str())
+            return extensions.contains(&sext.to_lowercase().as_str());
         }
     }
     false
@@ -52,7 +51,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let path = Path::new(&opts.mib);
 
-    let options = ParseOptions { pretty_print: opts.pretty };
+    let options = ParseOptions {
+        pretty_print: opts.pretty,
+    };
 
     if path.is_dir() {
         // Batch load of MIBs
@@ -62,11 +63,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Extensions we care about
         let extensions = vec!["txt", "mib"];
 
-        for path in WalkDir::new(path).into_iter()
-                 .filter_map(|e| e.ok())
-                 .filter(|e| e.file_type().is_file())
-                 .map(|e| e.into_path()) // Dir entries keep a file lock, so consume them into paths
-                 .filter(|p| match_ext(p, &extensions)) {
+        for path in WalkDir::new(path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.into_path()) // Dir entries keep a file lock, so consume them into paths
+            .filter(|p| match_ext(p, &extensions))
+        {
             match parse_file(&path, &options) {
                 Ok(info) => {
                     parsed_ok += 1;
@@ -77,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if opts.yaml {
                         println!("{}", serde_yaml::to_string(&info)?);
                     }
-                },
+                }
                 Err(e) => {
                     parse_failed += 1;
                     error!("Parsed failed for {}", path.display());
@@ -87,7 +90,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        println!("{} files parsed, {} files failed to parse in {}ms", parsed_ok, parse_failed, now.elapsed().as_millis());
+        println!(
+            "{} files parsed, {} files failed to parse in {}ms",
+            parsed_ok,
+            parse_failed,
+            now.elapsed().as_millis()
+        );
     } else {
         trace!("Parsing {}", path.display());
         match parse_file(&path, &options) {
@@ -103,4 +111,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

@@ -13,6 +13,7 @@ type Result<T> = std::result::Result<T, Error<Rule>>;
 type Node<'i> = pest_consume::Node<'i, Rule, ()>;
 type Nodes<'i> = pest_consume::Nodes<'i, Rule, ()>;
 
+#[allow(clippy::result_large_err)]
 pub fn parse_mib(mib_text: &str, options: &ParseOptions) -> Result<MibInfo> {
     let nodes = MibParser::parse(Rule::mib, mib_text)?;
     let main_node = nodes.single()?;
@@ -35,7 +36,7 @@ impl MibParser {
 
     fn mib(node: Node) -> Result<MibInfo> {
         Ok(match_nodes!(node.into_children();
-            [module_definition(mut defs).., EOI] => MibInfo{ modules: defs.collect()},
+            [module_definition(defs).., _EOI] => MibInfo{ modules: defs.collect()},
         ))
     }
 
@@ -48,9 +49,9 @@ impl MibParser {
     fn module_body(node: Node) -> Result<(Vec<Import>, Vec<Assignment>)> {
         Ok(match_nodes!(node.into_children();
             [assignment_list(a)] => (vec![], a),
-            [export_list(e), assignment_list(a)] => (vec![], a),
+            [export_list(_e), assignment_list(a)] => (vec![], a),
             [import_list(i), assignment_list(a)] => (i, a),
-            [export_list(e), import_list(i), assignment_list(a)] => (i, a),
+            [export_list(_e), import_list(i), assignment_list(a)] => (i, a),
         ))
     }
 
